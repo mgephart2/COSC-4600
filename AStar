@@ -1,0 +1,132 @@
+import sys
+import json
+from queue import PriorityQueue
+
+class Node():
+
+  def __init__(self, state, parent, action, pathCost):
+    self.state = state
+    self.parent = parent
+    self.action = action
+    self.pathCost = pathCost
+    self.heuristic = 0
+
+  def calculate_heuristic(self, goal_state):
+    self.heuristic = abs(self.state[0] - goal_state[0]) + abs(self.state[1] - goal_state[1])
+
+
+class Maze():
+
+  def __init__(self, filename):
+
+    with open(filename) as f:
+      contents = f.read()
+
+
+    contents = contents.splitlines()
+    self.height = len(contents)
+    self.width = max(len(line) for line in contents)
+
+    self.costs = {}  # dictionary to hold cost
+    self.walls = set()  # dictionary to hold walls
+
+    for i in range(self.height):
+      for j in range(self.width):
+        cell_value = contents[i][j]
+        if cell_value == ".":
+          self.s0 = (i, j)
+          self.costs[(i, j)] = 0
+        elif cell_value == "P":
+          self.goal = (i, j)
+          self.costs[(i, j)] = 0
+        elif cell_value == " ":
+          self.costs[(i, j)] = 1
+        elif cell_value.isdigit():
+          self.costs[(i, j)] = int(cell_value)
+        else:
+          self.walls.add((i, j))
+
+  def actions(self, state):
+    row, col = state
+    candidates = [
+        (0, -1),  #left
+        (-1, 0),  #up
+        (0, 1),  #right
+        (1, 0),  #down
+    ]
+
+    valid_actions = []
+    for a in candidates:
+      r, c = row + a[0], col + a[1]
+      if 0 <= r < self.height and 0 <= c < self.width and (
+          r, c) not in self.walls:
+        valid_actions.append(a)
+        
+    return valid_actions
+    
+
+  def result(self, s, a):
+    r, c = s[0] + a[0], s[1] + a[1]
+    return (r, c)
+
+
+  def terminal(self, s):
+      return s == self.goal
+
+  def solve(self):
+    current_node = Node(self.s0, None, None, 0)
+    frontier = PriorityQueue()
+    count = 0
+    exploredSet = set()
+    frontier.put((0, count, current_node))
+    exploredStates = 0
+
+    while not frontier.empty():
+        _, _, current_node = frontier.get()
+        exploredSet.add(current_node.state)
+
+        if self.terminal(current_node.state):
+            totalPathCost = current_node.pathCost
+            foundPath = self.reconstruct_path(current_node)
+            result_dict = {
+                "pathCost": totalPathCost,
+                "numberOfExploredStates": exploredStates,
+                "foundPath": foundPath
+            }
+            return json.dumps(result_dict, indent=4)
+
+        va = self.actions(current_node.state)
+        for a in va:
+            new_state = self.result(current_node.state, a)
+            if new_state not in exploredSet:
+                new_node = Node(new_state, current_node, a, current_node.pathCost + self.costs[new_state])
+                new_node.calculate_heuristic(self.goal)
+                priority = new_node.pathCost + new_node.heuristic
+                frontier.put((priority, count, new_node))
+                count += 1
+                exploredStates += 1
+
+    result_dict = {
+        "pathCost": "N/A",
+        "numberOfExploredStates": "N/A",
+        "foundPath": "N/A"
+    }
+    return json.dumps(result_dict, indent=4)
+    
+    pass
+
+  def reconstruct_path(self, node):
+    path = []
+    while node:
+        path.append(node.state)
+        node = node.parent
+    reversed_path = path[::-1]
+    formatted_pairs = ["|{},{}|".format(x, y) for x, y in reversed_path]
+    result = '->'.join(formatted_pairs)
+    return result 
+    
+    pass
+
+maze = Maze(sys.argv[1])
+result = maze.solve()
+print(result)
